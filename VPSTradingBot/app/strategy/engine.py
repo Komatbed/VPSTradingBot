@@ -628,11 +628,26 @@ class StrategyEngine:
         first_time = instrument not in self._seen_instruments
         if first_time:
             self._seen_instruments.add(instrument)
-        min_score = 70.0 if first_time else 50.0
+            
+        # --- DYNAMIC CONFIDENCE THRESHOLD ---
+        # Based on Config.math_confidence (1-10)
+        # Level 1 (Low Confidence/Cykor): Threshold 30
+        # Level 5 (Medium): Threshold 55
+        # Level 10 (High Confidence/Sniper): Threshold 85
+        # Formula: 30 + (level-1) * 6.1
+        c_level = max(1, min(10, self._config.math_confidence))
+        min_score = 30.0 + ((c_level - 1) * 6.1)
+        
+        # Safety bump for first trade of the session
+        if first_time:
+            min_score += 5.0
+            
         if best_score < min_score:
-            self._log.debug("Best score below threshold (%.2f<%.2f) -> NO_TRADE for instrument=%s timeframe=%s", best_score, min_score, snapshot.instrument, snapshot.timeframe)
+            self._log.info("Best score below dynamic threshold (%.2f < %.2f [L%d]) -> NO_TRADE for %s", 
+                           best_score, min_score, c_level, snapshot.instrument)
             await self._emit_no_trade(snapshot)
             return
+            
         risk_blocked = not self._risk_guard.can_open_trade(snapshot.instrument)
         if risk_blocked:
             self._log.info("RiskGuard blocked trade for instrument=%s (max trades reached)", snapshot.instrument)

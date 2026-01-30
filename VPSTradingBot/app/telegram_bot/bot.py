@@ -159,6 +159,27 @@ class TelegramBot:
         except Exception as exc:
             self._log.warning("sendMessage error %s", exc)
 
+    async def _edit_message_text(self, session: aiohttp.ClientSession, chat_id: str, message_id: int, text: str, reply_markup: Optional[Dict] = None) -> None:
+        url = self._api_url("editMessageText")
+        payload = {
+            "chat_id": chat_id, 
+            "message_id": message_id, 
+            "text": text, 
+            "parse_mode": "HTML"
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        try:
+            async with session.post(url, json=payload, timeout=10) as resp:
+                if resp.status >= 400:
+                    try:
+                        body = await resp.text()
+                    except Exception:
+                        body = "<no body>"
+                    self._log.warning("editMessageText failed with status %s body=%s", resp.status, body)
+        except Exception as exc:
+            self._log.warning("editMessageText error %s", exc)
+
     async def send_system_message(self, text: str) -> None:
         if not self._config.telegram_bot_token or not self._config.telegram_chat_id:
             return
@@ -885,6 +906,8 @@ class TelegramBot:
                     f"Interwał danych: {c.data_poll_interval_seconds}s",
                 ]
                 await self._send_message(session, str(chat_id), "\n".join(lines))
+            elif command_type == "strategy_config":
+                await self._handle_strategy_config_command(session, str(chat_id))
             elif command_type == "backtest":
                 symbol = command.get("symbol")
                 timeframe = command.get("timeframe") or self._config.timeframe
@@ -1074,6 +1097,11 @@ class TelegramBot:
                     "/diag - Autodiagnostyka systemu",
                     "/restartml - Przeładowanie modelu ML",
                     "/restart - Restart procesu bota",
+                    "/pause - Zatrzymaj otwieranie nowych pozycji",
+                    "/resume - Wznów otwieranie nowych pozycji",
+                    "/check_update - Sprawdź dostępność aktualizacji",
+                    "/update_git - Pobierz i zaktualizuj kod (Git Pull)",
+                    "/rollback - Cofnij ostatnią aktualizację",
                     "/help - Ta lista komend",
                     "",
                     "🎮 **Gamifikacja**",
@@ -1085,6 +1113,9 @@ class TelegramBot:
                 await self._handle_trade_command(session, str(chat_id))
             elif command_type == "admin":
                 # SYSTEM MENU (Context / Admin)
+                is_paused = self._config.system_paused
+                pause_btn = {"text": "▶️ Wznów (Resume)", "callback_data": "cmd:resume"} if is_paused else {"text": "⏸️ Pauza (Pause)", "callback_data": "cmd:pause"}
+                
                 keyboard = {
                     "inline_keyboard": [
                         [
@@ -1092,10 +1123,15 @@ class TelegramBot:
                             {"text": "📝 Logi", "callback_data": "cmd:debug"},
                         ],
                         [
+                            pause_btn,
+                            {"text": "🔄 Sprawdź Update", "callback_data": "cmd:check_update"},
+                        ],
+                        [
                             {"text": "🔄 Restart", "callback_data": "cmd:restart"},
                             {"text": "⚠️ PANIC BUTTON", "callback_data": "cmd:panic_menu"},
                         ],
                         [
+                            {"text": "⚙️ Strategia", "callback_data": "menu:config_menu"},
                             {"text": "🔙 Powrót", "callback_data": "menu:menu"},
                         ]
                     ]
@@ -1786,6 +1822,92 @@ class TelegramBot:
         
         await self._send_message(session, str(chat_id), "\n".join(lines))
 
+    async def _handle_strategy_config_command(self, session: aiohttp.ClientSession, chat_id: str, message_id: Optional[int] = None) -> None:
+        """Displays or edits the strategy configuration menu."""
+        c = self._config
+        
+        # Determine labels based on levels
+        agg_label = "Cykor" if c.aggressiveness <= 3 else "Zrównoważony" if c.aggressiveness <= 7 else "Wariat"
+        math_label = "Niska" if c.math_confidence <= 3 else "Średnia" if c.math_confidence <= 7 else "Wysoka"
+        
+        text = (
+            "⚙️ **KONFIGURACJA STRATEGII**\n\n"
+            f"📈 **Agresywność:** {c.aggressiveness}/10 ({agg_label})\n"
+            f"🧮 **Pewność Mat.:** {c.math_confidence}/10 ({math_label})\n\n"
+            "Dostosuj parametry poniżej. Zmiany są zapisywane natychmiast."
+        )
+        
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "📈 Agresywność (Ryzyko)", "callback_data": "conf:dummy"}
+                ],
+                [
+                    {"text": "➖", "callback_data": "conf:agg:dec"},
+                    {"text": f"{c.aggressiveness}", "callback_data": "conf:dummy"},
+                    {"text": "➕", "callback_data": "conf:agg:inc"}
+                ],
+                [
+                    {"text": "🧮 Pewność Matematyczna (Score)", "callback_data": "conf:dummy"}
+                ],
+                [
+                    {"text": "➖", "callback_data": "conf:math:dec"},
+                    {"text": f"{c.math_confidence}", "callback_data": "conf:dummy"},
+                    {"text": "➕", "callback_data": "conf:math:inc"}
+                ],
+                [
+                    {"text": "🧪 Testuj (Backtest EURUSD)", "callback_data": "conf:test"}
+                ],
+                [
+                    {"text": "🔙 Wróć do Admina", "callback_data": "cmd:admin"}
+                ]
+            ]
+        }
+        
+        if message_id:
+            await self._edit_message_text(session, chat_id, message_id, text, reply_markup=keyboard)
+        else:
+            await self._send_message(session, chat_id, text, reply_markup=keyboard)
+
+    async def _handle_config_action(self, session: aiohttp.ClientSession, chat_id: str, message_id: int, action: str) -> None:
+        """Handles config adjustment actions."""
+        # action format: agg:inc, agg:dec, math:inc, math:dec, save, test
+        
+        changed = False
+        
+        if action == "test":
+             # Trigger backtest command
+             await self._send_message(session, chat_id, "🚀 Rozpoczynam szybki test strategii (EURUSD, H1, 500 świec)...")
+             # Trigger backtest for EURUSD H1 500 candles
+             summary = await self._run_backtest_for_symbol("EURUSD", "1h", 500)
+             await self._send_message(session, chat_id, summary)
+             return
+
+        if action == "agg:inc":
+            if self._config.aggressiveness < 10:
+                self._config.aggressiveness += 1
+                changed = True
+        elif action == "agg:dec":
+            if self._config.aggressiveness > 1:
+                self._config.aggressiveness -= 1
+                changed = True
+        elif action == "math:inc":
+            if self._config.math_confidence < 10:
+                self._config.math_confidence += 1
+                changed = True
+        elif action == "math:dec":
+            if self._config.math_confidence > 1:
+                self._config.math_confidence -= 1
+                changed = True
+        
+        if changed:
+            self._config.save_runtime_config()
+            # Refresh the UI
+            await self._handle_strategy_config_command(session, chat_id, message_id)
+        else:
+            # If no change (limit reached), just answer callback query (already done in _handle_callback)
+            pass
+
     async def _answer_callback_query(self, callback_id: str, text: str = "") -> None:
         url = self._api_url("answerCallbackQuery")
         payload = {"callback_query_id": callback_id, "text": text}
@@ -1817,6 +1939,7 @@ class TelegramBot:
                 "tips": "tips",
                 "favorites": "favorites_list",
                 "config": "config",
+                "config_menu": "strategy_config",
                 "instruments": "instruments_summary",
                 "help": "help",
                 "gamify": "profile",
@@ -1833,6 +1956,17 @@ class TelegramBot:
                         timestamp=datetime.utcnow(),
                     )
                 )
+
+        elif callback_data.startswith("conf:"):
+            # Config adjustment actions
+            # conf:agg:inc
+            sub_action = callback_data[5:] # remove "conf:"
+            if sub_action == "dummy":
+                return
+                
+            async with aiohttp.ClientSession() as session:
+                msg_id = message.get("message_id")
+                await self._handle_config_action(session, chat_id, msg_id, sub_action)
 
         elif callback_data.startswith("cmd:"):
             # "cmd:pause", "cmd:resume", "cmd:restart", "cmd:diag", "cmd:gamify", "cmd:hot", "cmd:portfolio", "cmd:risk_status"

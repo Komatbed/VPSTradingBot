@@ -214,6 +214,7 @@ class Paths:
     ACTIVE_TRADES = DATA_DIR / "active_trades.json"
     NEWS_CACHE = DATA_DIR / "news_cache.json"
     ECONOMIC_HISTORY = DATA_DIR / "economic_history.json"
+    RUNTIME_CONFIG = DATA_DIR / "runtime_config.json"
 
 # -----------------------------------------------------------------------------
 # 5. GŁÓWNA KLASA KONFIGURACYJNA (RUNTIME)
@@ -248,9 +249,26 @@ class Config:
     # Edukacja
     educational_mode: bool    # Czy tryb edukacyjny jest włączony (True/False)
     
+    # Advanced Configuration (Dynamic)
+    aggressiveness: int = 5       # 1-10 (1=Cykor, 10=Wariat)
+    math_confidence: int = 5      # 1-10 (1=Niska pewność, 10=Wysoka pewność)
+    
     # System Control
     risk_guard_enabled: bool = True # Czy RiskGuard jest aktywny
     system_paused: bool = False     # Czy system jest zapauzowany (runtime)
+
+    def save_runtime_config(self) -> None:
+        """Saves dynamic parameters to runtime_config.json."""
+        data = {
+            "aggressiveness": self.aggressiveness,
+            "math_confidence": self.math_confidence,
+            "system_paused": self.system_paused,
+            "risk_guard_enabled": self.risk_guard_enabled
+        }
+        try:
+            Paths.RUNTIME_CONFIG.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            pass
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -268,7 +286,17 @@ class Config:
             except Exception:
                 local_config = {}
 
+        # Load Runtime Config (Overrides)
+        runtime_config: Dict[str, Any] = {}
+        if Paths.RUNTIME_CONFIG.exists():
+            try:
+                runtime_config = json.loads(Paths.RUNTIME_CONFIG.read_text(encoding="utf-8"))
+            except Exception:
+                runtime_config = {}
+
         def get_str(name: str, default: str) -> str:
+            # Priority: Runtime -> Local -> Env -> Default
+            # (Note: Runtime usually only stores dynamic params, but let's be safe)
             value = local_config.get(name)
             if isinstance(value, str) and value:
                 return value
@@ -294,7 +322,16 @@ class Config:
 
         environment = get_str("ENVIRONMENT", "practice")
         mode = get_str("MODE", "advisor")
-        risk_guard_enabled = get_str("RISK_GUARD_ENABLED", "true").lower() == "true"
+        
+        # Boolean Logic with Runtime Override support
+        risk_guard_env = get_str("RISK_GUARD_ENABLED", "true").lower() == "true"
+        risk_guard_enabled = runtime_config.get("risk_guard_enabled", risk_guard_env)
+        
+        system_paused = runtime_config.get("system_paused", False)
+        
+        # Dynamic Params
+        aggressiveness = runtime_config.get("aggressiveness", get_int("AGGRESSIVENESS", "5"))
+        math_confidence = runtime_config.get("math_confidence", get_int("MATH_CONFIDENCE", "5"))
         
         data_source = get_str("DATA_SOURCE", "yahoo")
         instruments_env = get_str("INSTRUMENTS", "")
@@ -331,5 +368,7 @@ class Config:
             ml_base_url=get_str("ML_BASE_URL", ""),
             educational_mode=get_str("EDUCATIONAL_MODE", "true").lower() == "true",
             risk_guard_enabled=risk_guard_enabled,
-            system_paused=False, # Default start state
+            system_paused=system_paused,
+            aggressiveness=aggressiveness,
+            math_confidence=math_confidence,
         )
