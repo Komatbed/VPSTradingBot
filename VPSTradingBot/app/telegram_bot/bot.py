@@ -34,6 +34,7 @@ from app.gamification.engine import GamificationEngine
 from app.analysis.market_regime import MarketRegimeEngine
 from app.diagnostics import DiagnosticsEngine
 from app.notifications.alert_manager import AlertManager
+from app.updater.updater import UpdateManager
 import random
 
 
@@ -98,6 +99,18 @@ class TelegramBot:
         
         # Updater
         self._updater = UpdateManager()
+        
+        # ML Client
+        self._ml_client = MlAdvisorClient(config)
+
+        # ML Client
+        self._ml_client = MlAdvisorClient(config)
+
+        # ML Client
+        self._ml_client = MlAdvisorClient(config)
+
+        # ML Client
+        self._ml_client = MlAdvisorClient(config)
 
 
     def _get_rank_flavor(self, chat_id: str) -> str:
@@ -653,7 +666,30 @@ class TelegramBot:
         if not self._config.telegram_bot_token:
             return
         async with aiohttp.ClientSession() as session:
-            if command_type == "why_last_trade":
+            if command_type == "check_update":
+                is_new, msg = self._updater.check_for_updates()
+                await self._send_message(session, str(chat_id), f"🔍 **Status aktualizacji:**\n{msg}")
+            elif command_type == "update_git":
+                await self._send_message(session, str(chat_id), "🚀 **Aktualizacja:** Rozpoczynam proces aktualizacji...")
+                res = self._updater.perform_update(str(chat_id))
+                await self._send_message(session, str(chat_id), f"ℹ️ {res}")
+            elif command_type == "update_status":
+                status = self._updater.get_status()
+                await self._send_message(session, str(chat_id), f"📊 **Status systemu:**\n{status}")
+            elif command_type == "rollback":
+                await self._send_message(session, str(chat_id), "🔙 **Rollback:** Przywracam poprzednią wersję...")
+                res = self._updater.rollback()
+                await self._send_message(session, str(chat_id), f"ℹ️ {res}")
+            elif command_type == "clear_cache":
+                self._updater.guard.cleanup_cache()
+                await self._send_message(session, str(chat_id), "🧹 **Cache:** Wyczyszczono pliki tymczasowe.")
+            elif command_type == "clear_backtests":
+                self._updater.guard.cleanup_backtests()
+                await self._send_message(session, str(chat_id), "🧹 **Backtests:** Wyczyszczono wyniki testów.")
+            elif command_type == "clear_ml":
+                self._updater.guard.cleanup_ml()
+                await self._send_message(session, str(chat_id), "🧹 **ML:** Wyczyszczono modele ML.")
+            elif command_type == "why_last_trade":
                 text = f"📜 **Wyjaśnienie ostatniej decyzji:**\n\n{self._last_explanation}" if self._last_explanation else "ℹ️ **Info:** Brak zarejestrowanego ostatniego trade’u."
                 await self._send_message(session, str(chat_id), text)
             elif command_type == "restartml":
@@ -2209,6 +2245,8 @@ class TelegramBot:
             {"command": "profile", "description": "👤 Profil Tradera"},
             {"command": "learn", "description": "📚 Leksykon Wiedzy"},
             {"command": "tips", "description": "💡 Porada Dnia"},
+            {"command": "check_update", "description": "🔍 Sprawdź aktualizacje"},
+            {"command": "update_status", "description": "📊 Status systemu"},
             {"command": "help", "description": "❓ Pomoc"},
         ]
         
