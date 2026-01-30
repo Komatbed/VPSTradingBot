@@ -1,0 +1,100 @@
+RAPORT WERYFIKACJI DANYCH INSTRUMENTÓW - 2026-01-28 13:23:11
+============================================================
+Łącznie sprawdzono: 211
+✅ Prawidłowe: 206
+⚠️ Ostrzeżenia (np. stare dane): 0
+❌ Błędy (brak danych/połączenia): 5
+============================================================
+
+SZCZEGÓŁY PROBLEMÓW I DIAGNOSTYKA:
+------------------------------------------------------------
+
+❌ INSTRUMENT: [UNI-USD]
+   Status: ERROR
+   Komunikat: Brak danych historycznych (empty dataframe)
+
+   🔍 DIAGNOZA: Brak danych historycznych (Empty DataFrame)
+   ℹ️  Opis: Zapytanie do API zwróciło pusty zestaw danych. Oznacza to, że dla podanego symbolu nie znaleziono żadnych notowań w zadanym okresie.
+   ❓ Przyczyny:
+      - Błędny ticker (literówka, zły sufiks giełdy, np. .WA dla GPW).
+      - Instrument został wycofany z giełdy (delisted).
+      - Zmiana tickera (rebranding firmy lub fuzja).
+      - Brak danych dla tego instrumentu w serwisie Yahoo Finance (np. niszowe indeksy).
+   🛠️  KROKI NAPRAWY:
+      -> Sprawdź pisownię tickera na stronie finance.yahoo.com.
+      -> Upewnij się, że używasz poprawnego sufiksu (np. 'PKN.WA' zamiast 'PKN').
+      -> Wyszukaj nową nazwę spółki w Google (np. 'Facebook ticker change' -> META).
+      -> Jeśli instrument jest poprawny, ale brak danych, rozważ zmianę dostawcy danych lub usunięcie go z listy.
+------------------------------
+
+❌ INSTRUMENT: [MATIC-USD]
+   Status: ERROR
+   Komunikat: Brak danych historycznych (empty dataframe)
+
+   🔍 DIAGNOZA: Brak danych historycznych (Empty DataFrame)
+   ℹ️  Opis: Zapytanie do API zwróciło pusty zestaw danych. Oznacza to, że dla podanego symbolu nie znaleziono żadnych notowań w zadanym okresie.
+   ❓ Przyczyny:
+      - Błędny ticker (literówka, zły sufiks giełdy, np. .WA dla GPW).
+      - Instrument został wycofany z giełdy (delisted).
+      - Zmiana tickera (rebranding firmy lub fuzja).
+      - Brak danych dla tego instrumentu w serwisie Yahoo Finance (np. niszowe indeksy).
+   🛠️  KROKI NAPRAWY:
+      -> Sprawdź pisownię tickera na stronie finance.yahoo.com.
+      -> Upewnij się, że używasz poprawnego sufiksu (np. 'PKN.WA' zamiast 'PKN').
+      -> Wyszukaj nową nazwę spółki w Google (np. 'Facebook ticker change' -> META).
+      -> Jeśli instrument jest poprawny, ale brak danych, rozważ zmianę dostawcy danych lub usunięcie go z listy.
+------------------------------
+
+❌ INSTRUMENT: [JJC]
+   Status: ERROR
+   Komunikat: Brak danych historycznych (empty dataframe)
+
+   🔍 DIAGNOZA: Brak danych historycznych (Empty DataFrame)
+   ℹ️  Opis: Zapytanie do API zwróciło pusty zestaw danych. Oznacza to, że dla podanego symbolu nie znaleziono żadnych notowań w zadanym okresie.
+   ❓ Przyczyny:
+      - Błędny ticker (literówka, zły sufiks giełdy, np. .WA dla GPW).
+      - Instrument został wycofany z giełdy (delisted).
+      - Zmiana tickera (rebranding firmy lub fuzja).
+      - Brak danych dla tego instrumentu w serwisie Yahoo Finance (np. niszowe indeksy).
+   🛠️  KROKI NAPRAWY:
+      -> Sprawdź pisownię tickera na stronie finance.yahoo.com.
+      -> Upewnij się, że używasz poprawnego sufiksu (np. 'PKN.WA' zamiast 'PKN').
+      -> Wyszukaj nową nazwę spółki w Google (np. 'Facebook ticker change' -> META).
+      -> Jeśli instrument jest poprawny, ale brak danych, rozważ zmianę dostawcy danych lub usunięcie go z listy.
+------------------------------
+
+❌ INSTRUMENT: [JO]
+   Status: ERROR
+   Komunikat: Brak danych historycznych (empty dataframe)
+
+   🔍 DIAGNOZA: Brak danych historycznych (Empty DataFrame)
+   ℹ️  Opis: Zapytanie do API zwróciło pusty zestaw danych. Oznacza to, że dla podanego symbolu nie znaleziono żadnych notowań w zadanym okresie.
+   ❓ Przyczyny:
+      - Błędny ticker (literówka, zły sufiks giełdy, np. .WA dla GPW).
+      - Instrument został wycofany z giełdy (delisted).
+      - Zmiana tickera (rebranding firmy lub fuzja).
+      - Brak danych dla tego instrumentu w serwisie Yahoo Finance (np. niszowe indeksy).
+   🛠️  KROKI NAPRAWY:
+      -> Sprawdź pisownię tickera na stronie finance.yahoo.com.
+      -> Upewnij się, że używasz poprawnego sufiksu (np. 'PKN.WA' zamiast 'PKN').
+      -> Wyszukaj nową nazwę spółki w Google (np. 'Facebook ticker change' -> META).
+      -> Jeśli instrument jest poprawny, ale brak danych, rozważ zmianę dostawcy danych lub usunięcie go z listy.
+------------------------------
+
+❌ INSTRUMENT: [NIB]
+   Status: ERROR
+   Komunikat: Brak danych historycznych (empty dataframe)
+
+   🔍 DIAGNOZA: Brak danych historycznych (Empty DataFrame)
+   ℹ️  Opis: Zapytanie do API zwróciło pusty zestaw danych. Oznacza to, że dla podanego symbolu nie znaleziono żadnych notowań w zadanym okresie.
+   ❓ Przyczyny:
+      - Błędny ticker (literówka, zły sufiks giełdy, np. .WA dla GPW).
+      - Instrument został wycofany z giełdy (delisted).
+      - Zmiana tickera (rebranding firmy lub fuzja).
+      - Brak danych dla tego instrumentu w serwisie Yahoo Finance (np. niszowe indeksy).
+   🛠️  KROKI NAPRAWY:
+      -> Sprawdź pisownię tickera na stronie finance.yahoo.com.
+      -> Upewnij się, że używasz poprawnego sufiksu (np. 'PKN.WA' zamiast 'PKN').
+      -> Wyszukaj nową nazwę spółki w Google (np. 'Facebook ticker change' -> META).
+      -> Jeśli instrument jest poprawny, ale brak danych, rozważ zmianę dostawcy danych lub usunięcie go z listy.
+------------------------------

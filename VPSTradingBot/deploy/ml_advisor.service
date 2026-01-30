@@ -1,0 +1,26 @@
+[Unit]
+Description=Trading ML Advisor Service
+After=network.target
+
+[Service]
+# Zmien 'root' na swojego uzytkownika jesli to nie root
+User=root
+
+# --- KONFIGURACJA SCIEZEK ---
+# Zmien ponizsze sciezki na faktyczna lokalizacje projektu na Twoim VPS
+WorkingDirectory=/home/ubuntu/TradeBot
+ExecStart=/home/ubuntu/TradeBot/start_ml.sh
+
+# Restartuj w przypadku awarii
+Restart=always
+RestartSec=10
+
+# Zmienne srodowiskowe
+Environment=PYTHONUNBUFFERED=1
+
+# --- LOGI SYSTEMOWE ---
+StandardOutput=append:/home/ubuntu/TradeBot/ml_output.log
+StandardError=append:/home/ubuntu/TradeBot/ml_error.log
+
+[Install]
+WantedBy=multi-user.target

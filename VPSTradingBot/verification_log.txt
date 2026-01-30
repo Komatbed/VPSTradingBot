@@ -1,0 +1,31 @@
+2026-01-28 13:17:27,669 [INFO] Rozpoczynam weryfikację 211 instrumentów...
+2026-01-28 13:17:31,387 [ERROR] $KRUK.WA: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:17:31,389 [ERROR] ❌ KRUK.WA: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:32,190 [ERROR] HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: BUD.WA"}}}
+2026-01-28 13:17:32,764 [ERROR] $BUD.WA: possibly delisted; no price data found  (period=5d) (Yahoo error = "No data found, symbol may be delisted")
+2026-01-28 13:17:32,764 [ERROR] ❌ BUD.WA: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:33,341 [ERROR] $UNI-USD: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:17:33,341 [ERROR] ❌ UNI-USD: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:36,528 [ERROR] $^DAX: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:17:36,530 [ERROR] ❌ ^DAX: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:37,396 [ERROR] $MATIC-USD: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:17:37,398 [ERROR] ❌ MATIC-USD: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:38,025 [ERROR] $JO: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:17:38,026 [ERROR] ❌ JO: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:38,083 [ERROR] $JJC: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:17:38,083 [ERROR] ❌ JJC: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:38,108 [ERROR] $NIB: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:17:38,108 [ERROR] ❌ NIB: Brak danych historycznych (empty dataframe)
+2026-01-28 13:17:38,489 [INFO] Raport zapisano w pliku: instrument_verification_report.txt
+2026-01-28 13:23:03,976 [INFO] Rozpoczynam weryfikację 211 instrumentów...
+2026-01-28 13:23:06,724 [ERROR] $UNI-USD: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:23:06,725 [ERROR] ❌ UNI-USD: Brak danych historycznych (empty dataframe)
+2026-01-28 13:23:10,790 [ERROR] $MATIC-USD: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:23:10,790 [ERROR] ❌ MATIC-USD: Brak danych historycznych (empty dataframe)
+2026-01-28 13:23:11,389 [ERROR] $JJC: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:23:11,389 [ERROR] ❌ JJC: Brak danych historycznych (empty dataframe)
+2026-01-28 13:23:11,393 [ERROR] $JO: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:23:11,393 [ERROR] ❌ JO: Brak danych historycznych (empty dataframe)
+2026-01-28 13:23:11,470 [ERROR] $NIB: possibly delisted; no price data found  (period=5d)
+2026-01-28 13:23:11,476 [ERROR] ❌ NIB: Brak danych historycznych (empty dataframe)
+2026-01-28 13:23:11,758 [INFO] Raport zapisano w pliku: instrument_verification_report.txt

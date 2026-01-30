@@ -1,0 +1,45 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+env/
+# Environment Variables
+.env
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Build & Distribution
+dist/
+build/
+deployment_package/
+*.spec
+
+# Logs & History
+logs/
+*.log
+trades/
+TEST_REPORT_*.md
+
+# Application Data (Runtime/Cache)
+app/data/*.json
+app/data/economic_history.json
+app/data/user_profile.json
+app/data/active_trades.json
+app/data/user_favorites.json
+backtests/*.json
+cache/yahoo/*.json
+
+# IDE Settings
+.vscode/
+.idea/
+
+# Temporary & Verification Scripts
+verify_*.py
+*copy.py
+*.old
+*.bak

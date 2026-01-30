@@ -1,0 +1,30 @@
+[Unit]
+Description=Trading Bot Companion
+After=network.target
+
+[Service]
+# Zmien 'root' na swojego uzytkownika jesli to nie root
+User=root
+
+# --- KONFIGURACJA SCIEZEK ---
+# Zmien ponizsze sciezki na faktyczna lokalizacje projektu na Twoim VPS
+# Przyklad: /root/trading_bot lub /home/user/trading_bot
+WorkingDirectory=/home/ubuntu/TradeBot
+ExecStart=/home/ubuntu/TradeBot/start_bot.sh
+
+# Restartuj w przypadku awarii
+Restart=always
+RestartSec=10
+
+# Ustawienie zmiennych srodowiskowych
+# Wylacz buforowanie wyjscia Pythona, aby logi pojawialy sie natychmiast
+# Zmienne srodowiskowe
+Environment=PYTHONUNBUFFERED=1
+
+# --- LOGI SYSTEMOWE ---
+# Zapisz wszystko co wypluje konsola do pliku (przydatne do debugowania)
+StandardOutput=append:/home/ubuntu/TradeBot/bot_output.log
+StandardError=append:/home/ubuntu/TradeBot/bot_error.log
+
+[Install]
+WantedBy=multi-user.target
