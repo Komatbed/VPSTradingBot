@@ -40,7 +40,15 @@ echo "✅ Using Python interpreter: $PYTHON_EXEC"
 # 2. Setup Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "📦 Creating virtual environment (.venv)..."
-    $PYTHON_EXEC -m venv .venv
+    if ! $PYTHON_EXEC -m venv .venv; then
+        echo "❌ Failed to create virtual environment!"
+        echo "   It seems you are missing the python3-venv package."
+        echo "   Please try running:"
+        echo "     sudo apt update"
+        echo "     sudo apt install ${PYTHON_EXEC}-venv"
+        echo "   Then run this script again."
+        exit 1
+    fi
 else
     echo "ℹ️  Virtual environment already exists."
 fi
@@ -48,8 +56,22 @@ fi
 # 3. Install Dependencies
 echo "📥 Installing dependencies..."
 source .venv/bin/activate
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to activate virtual environment. Aborting."
+    exit 1
+fi
+
 pip install --upgrade pip
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to upgrade pip. Aborting."
+    exit 1
+fi
+
 pip install -r requirements.txt
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to install requirements. Aborting."
+    exit 1
+fi
 
 # 4. Create .env if missing
 if [ ! -f ".env" ]; then
