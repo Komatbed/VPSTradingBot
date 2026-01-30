@@ -140,7 +140,8 @@ class DiagnosticsEngine:
         config: Config,
         news_client: Optional[NewsClient] = None,
         sentiment_engine: Optional[SentimentEngine] = None,
-        gamification_engine: Optional[GamificationEngine] = None
+        gamification_engine: Optional[GamificationEngine] = None,
+        risk_guard: Any = None
     ):
         self._config = config
         self._log = logging.getLogger("diagnostics")
@@ -149,6 +150,7 @@ class DiagnosticsEngine:
         self._news_client = news_client
         self._sentiment_engine = sentiment_engine
         self._gamification_engine = gamification_engine
+        self._risk_guard = risk_guard
         
         # Dedicated Yahoo Client for checks if needed (but Sentiment has one too)
         self._yahoo_client = YahooFinanceClient()
@@ -333,6 +335,21 @@ class DiagnosticsEngine:
             self._log.error(f"Codebase check failed: {e}")
             return {"error": str(e)}
 
+    def check_risk_guard(self) -> Dict[str, Any]:
+        if not self._risk_guard:
+             return {"status": "SKIPPED", "details": "RiskGuard not initialized"}
+        
+        try:
+            profile = self._risk_guard.get_dynamic_risk_profile()
+            return {
+                "status": "OK",
+                "risk_per_trade": f"{profile['risk_per_trade_percent']}%",
+                "max_trades": profile["max_daily_trades"],
+                "details": f"Multiplier: {profile['multiplier']}x"
+            }
+        except Exception as e:
+            return {"status": "ERROR", "details": str(e)}
+
     async def run_full_diagnostics(self) -> str:
         """Runs all checks and returns a formatted report string."""
         self._log.info("Running full system diagnostics...")
@@ -345,6 +362,7 @@ class DiagnosticsEngine:
         )
         
         news_status = self.check_news_client()
+        risk_status = self.check_risk_guard()
         system_status = self.check_system_resources()
         files_status = self.check_files()
         modules_status = self.check_modules()
@@ -356,6 +374,13 @@ class DiagnosticsEngine:
         # 1. System & Resources
         lines.append("🖥️ **SYSTEM**")
         lines.append(f"• Mode: {modules_status['Mode']} ({modules_status['Timeframe']})")
+        
+        # RiskGuard
+        if risk_status["status"] == "OK":
+            lines.append(f"• RiskGuard: ✅ Active ({risk_status['risk_per_trade']})")
+        else:
+            lines.append(f"• RiskGuard: ⚠️ {risk_status.get('details')}")
+            
         lines.append(f"• Disk Free: {system_status.get('disk_free_gb', '?')} GB")
         if system_status.get("status") != "OK":
             lines.append(f"• Alert: {system_status.get('status')}")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
+from typing import Dict, List
 
 from app.config import Config
 import logging
@@ -204,9 +204,9 @@ class StrategyEngine:
         if self._startup_mode and not risk_blocked:
             self._startup_mode = False
 
-    async def _emit_no_trade(self, snapshot) -> None:
+    async def _emit_no_trade(self, snapshot, reason: str = "Brak setupu spełniającego kryteria.", metadata: Optional[Dict[str, Any]] = None) -> None:
         """Emits a NO_TRADE decision when no strategy produces a valid signal."""
-        self._log.info("Emitting NO_TRADE for instrument=%s timeframe=%s", snapshot.instrument, snapshot.timeframe)
+        self._log.info("Emitting NO_TRADE for instrument=%s timeframe=%s reason=%s", snapshot.instrument, snapshot.timeframe, reason)
         decision_id = f"no_trade_{snapshot.instrument}_{snapshot.timeframe}_{int(datetime.utcnow().timestamp())}"
         tv_link = get_tv_link(snapshot.instrument)
         decision = FinalDecision(
@@ -225,8 +225,8 @@ class StrategyEngine:
             regime=snapshot.regime,
             expectancy_r=0.0,
             tradingview_link=tv_link,
-            explanation_text="Brak setupu spełniającego kryteria.",
-            metadata={},
+            explanation_text=reason,
+            metadata=metadata or {},
         )
         await self._event_bus.publish(
             Event(
@@ -377,7 +377,11 @@ class StrategyEngine:
         self,
         snapshot,
         signals: List[tuple[Strategy, StrategySignal, float]],
+        trade_score: TradeScore = None,
     ) -> None:
+        """
+        Evaluates candidates using ML (if enabled) and heuristics, then emits DECISION_READY.
+        """
         # --- SYSTEM PAUSE CHECK ---
         if self._config.system_paused:
              self._log.info(f"System paused. Skipping trade for {snapshot.instrument}")
@@ -411,8 +415,9 @@ class StrategyEngine:
              return
 
         # --- RISK GUARD CHECK ---
-        if not self._risk_guard.can_open_trade(snapshot.instrument):
-             self._log.warning(f"RiskGuard blocked trade for {snapshot.instrument} (Daily limit reached)")
+        risk_allowed, risk_reason = self._risk_guard.can_open_trade(snapshot.instrument)
+        if not risk_allowed:
+             self._log.warning(f"RiskGuard blocked trade for {snapshot.instrument}: {risk_reason}")
              
              decision_id = f"no_trade_risk_{snapshot.instrument}_{snapshot.timeframe}_{int(datetime.utcnow().timestamp())}"
              tv_link = get_tv_link(snapshot.instrument)
@@ -433,8 +438,8 @@ class StrategyEngine:
                 regime=snapshot.regime,
                 expectancy_r=0.0,
                 tradingview_link=tv_link,
-                explanation_text="🛡️ Blokada RiskGuard: Osiągnięto dzienny limit transakcji.",
-                metadata={"reason": "daily_limit_reached"},
+                explanation_text=f"🛡️ Blokada RiskGuard: {risk_reason}",
+                metadata={"reason": "risk_guard", "risk_details": risk_reason},
             )
              await self._event_bus.publish(
                 Event(
@@ -460,7 +465,12 @@ class StrategyEngine:
         vol_pct = self._calculate_volatility_percentile(snapshot.instrument, volatility)
         news_min = snapshot.time_to_news_min
         
+        # If we have a pre-calculated TradeScore (from ScoringEngine), we use it.
+        # Otherwise, we might fall back to legacy logic (though currently run() always passes it).
         scored: List[tuple[float, Strategy, StrategySignal, float, str, dict]] = []
+        
+        # If trade_score is provided, we trust it as the primary source of truth for the best signal.
+        # However, ML evaluation (below) might still apply adjustments (e.g. parameter tuning).
         for strategy, signal, expectancy_r in signals:
             if signal.stop_loss_price is None or signal.take_profit_price is None:
                 continue
@@ -611,7 +621,7 @@ class StrategyEngine:
             scored.append((score, strategy, signal, expectancy_r, ml_result.get("reason", ""), adjustments, reason_text))
         if not scored:
             self._log.debug("All candidate signals filtered out by ML/parameters for instrument=%s timeframe=%s", snapshot.instrument, snapshot.timeframe)
-            await self._emit_no_trade(snapshot)
+            await self._emit_no_trade(snapshot, reason="Brak sygnałów po filtracji ML/parametrów")
             return
         scored.sort(key=lambda x: x[0], reverse=True)
         best_score, best_strategy, best_signal, best_expectancy, ml_reason, best_adjustments, score_reason_text = scored[0]
@@ -645,12 +655,15 @@ class StrategyEngine:
         if best_score < min_score:
             self._log.info("Best score below dynamic threshold (%.2f < %.2f [L%d]) -> NO_TRADE for %s", 
                            best_score, min_score, c_level, snapshot.instrument)
-            await self._emit_no_trade(snapshot)
+            await self._emit_no_trade(snapshot, reason=f"Niski Wynik: {best_score:.1f} < {min_score:.1f}", metadata={"raw_score": best_score, "min_score": min_score})
             return
             
-        risk_blocked = not self._risk_guard.can_open_trade(snapshot.instrument)
-        if risk_blocked:
-            self._log.info("RiskGuard blocked trade for instrument=%s (max trades reached)", snapshot.instrument)
+        risk_allowed, risk_reason = self._risk_guard.can_open_trade(snapshot.instrument)
+        if not risk_allowed:
+            self._log.info("RiskGuard blocked trade for instrument=%s: %s", snapshot.instrument, risk_reason)
+            await self._emit_no_trade(snapshot, reason=f"Blokada RiskGuard: {risk_reason}", metadata={"reason": "risk_guard", "risk_details": risk_reason})
+            return
+        
         explanation = self._explain_engine.build_pre_trade_explanation(snapshot, best_signal, best_expectancy)
         
         # Append score reasons to explanation
@@ -661,28 +674,29 @@ class StrategyEngine:
         sl = best_signal.stop_loss_price
         tp = best_signal.take_profit_price
         if sl is None or tp is None:
-            await self._emit_no_trade(snapshot)
+            await self._emit_no_trade(snapshot, reason="Brak SL/TP")
             return
         rr = abs(tp - last_close) / max(abs(last_close - sl), 1e-6)
         
         direction = TradeDirection.LONG if best_signal.signal_type.name == "BUY" else TradeDirection.SHORT
         tv_link = get_tv_link(snapshot.instrument)
         decision_id = f"{best_strategy.id}_{snapshot.instrument}_{snapshot.timeframe}_{int(datetime.utcnow().timestamp())}"
-        if not risk_blocked:
-            self._risk_guard.register_trade(snapshot.instrument)
+        
+        # Get Dynamic Risk Profile
+        risk_profile = self._risk_guard.get_dynamic_risk_profile()
+        risk_pct = risk_profile["risk_per_trade_percent"]
+        
         sizing_input = PositionSizingInput(
             signal=best_signal,
             account_balance=self._account_balance,
             stop_loss_price=best_signal.stop_loss_price,
         )
-        suggested_units = self._risk_engine.calculate_units(sizing_input)
+        suggested_units = self._risk_engine.calculate_units(sizing_input, risk_percent_override=risk_pct)
         metadata = {"suggested_units": suggested_units}
         if ml_reason:
             metadata["ml_reason"] = ml_reason
         if best_adjustments:
             metadata["ml_parameter_adjustments"] = best_adjustments
-        if risk_blocked:
-            metadata["risk_blocked"] = True
             
         # Cap confidence at 99
         final_confidence = min(best_score, 99.0)

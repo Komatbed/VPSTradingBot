@@ -18,8 +18,9 @@ class RiskEngine:
     def __init__(self, config: Config) -> None:
         self._config = config
 
-    def calculate_units(self, sizing_input: PositionSizingInput) -> float:
-        risk_fraction = self._config.risk_per_trade_percent / 100.0
+    def calculate_units(self, sizing_input: PositionSizingInput, risk_percent_override: Optional[float] = None) -> float:
+        risk_pct = risk_percent_override if risk_percent_override is not None else self._config.risk_per_trade_percent
+        risk_fraction = risk_pct / 100.0
         balance = max(sizing_input.account_balance, 1000.0)
         max_loss_amount = balance * risk_fraction
         signal = sizing_input.signal

@@ -4,7 +4,7 @@ import json
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple
 
 from app.config import Config, Paths
 
@@ -92,30 +92,32 @@ class RiskGuard:
             "min_rr": round(min_rr, 2)
         }
 
-    def can_open_trade(self, instrument: str) -> bool:
+    def can_open_trade(self, instrument: str) -> Tuple[bool, str]:
         # If RiskGuard is disabled via config, allow all trades
         if not self._config.risk_guard_enabled:
-            return True
+            return True, "RiskGuard Disabled"
 
         self._ensure_today()
         
-        # Get Dynamic Limits
+        # 1. Global Daily Limit
+        # Get dynamic limit if applicable
         profile = self.get_dynamic_risk_profile()
         dynamic_max_trades = profile["max_trades_per_day"]
         
-        # Use the stricter of Config vs Dynamic
+        # Use stricter of the two (Config vs Dynamic) - usually Dynamic is derived from config but let's be safe
+        # Actually, let's just use the dynamic one as it respects aggressiveness
         limit_global = min(self._config.max_trades_per_day, dynamic_max_trades)
         
         if self._trades_total_for_day >= limit_global:
-            return False
+            return False, f"Daily Limit Reached ({self._trades_total_for_day}/{limit_global})"
             
+        # 2. Per-Instrument Daily Limit
         if self._trades_per_instrument_for_day[instrument] >= self._config.max_trades_per_instrument_per_day:
-            return False
+            return False, f"Instrument Limit Reached ({self._trades_per_instrument_for_day[instrument]}/{self._config.max_trades_per_instrument_per_day})"
             
-        return True
+        return True, "OK"
 
     def register_trade(self, instrument: str) -> None:
         self._ensure_today()
         self._trades_total_for_day += 1
         self._trades_per_instrument_for_day[instrument] += 1
-

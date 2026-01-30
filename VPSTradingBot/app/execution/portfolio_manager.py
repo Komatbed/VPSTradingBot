@@ -187,12 +187,34 @@ class PortfolioManager:
                 tp=decision.tp_price,
                 units=1000.0, # Default lots logic to be improved later
                 opened_at=datetime.utcnow(),
-                strategy_id=decision.strategy_id
+                strategy_id=decision.strategy_id,
+                explanation_data=decision.metadata # Store full metadata including scores
             )
             
             self._positions[position.trade_id] = position
             self._save_positions()
             self._log.info(f"Opened VIRTUAL position: {position.instrument} {position.direction.value} @ {position.entry_price}")
+
+            # Emit ORDER_FILLED event so RiskGuard and other components can update
+            order_result = OrderResult(
+                order_id=f"virtual_{position.trade_id}",
+                status=OrderStatus.FILLED,
+                instrument=position.instrument,
+                units=position.units,
+                direction=position.direction,
+                price=position.entry_price,
+                executed_at=position.opened_at,
+                rejection_reason=None,
+                strategy_id=position.strategy_id,
+                confidence=decision.confidence
+            )
+            await self._event_bus.publish(
+                Event(
+                    type=EventType.ORDER_FILLED,
+                    payload=order_result,
+                    timestamp=datetime.utcnow()
+                )
+            )
 
     async def _on_market_data(self, event: Event) -> None:
         """

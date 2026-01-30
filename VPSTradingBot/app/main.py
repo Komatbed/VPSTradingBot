@@ -71,10 +71,13 @@ async def run_loop() -> None:
     learning_engine = LearningEngine()
     learning_engine.refresh()
     
-    StrategyEngine(config, event_bus, strategies, explain_engine, learning_engine, news_client)
+    # Shared RiskGuard instance
+    risk_guard = RiskGuard(config)
+    
+    StrategyEngine(config, event_bus, strategies, explain_engine, learning_engine, news_client, risk_guard)
     DecisionLogger(event_bus, trade_logger)
     PortfolioManager(config, event_bus, trade_logger)
-    telegram_bot = TelegramBot(config, event_bus, news_client)
+    telegram_bot = TelegramBot(config, event_bus, news_client, risk_guard)
     
     # Task 1: Telegram Bot (Long running)
     telegram_task = asyncio.create_task(telegram_bot.run())

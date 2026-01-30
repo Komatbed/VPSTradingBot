@@ -253,6 +253,13 @@ class Config:
     aggressiveness: int = 5       # 1-10 (1=Cykor, 10=Wariat)
     math_confidence: int = 5      # 1-10 (1=Niska pewność, 10=Wysoka pewność)
     
+    # Extended Configuration (Sliders 0-100)
+    algo_sensitivity: int = 50    # Czułość algorytmu
+    threshold_value: int = 50     # Wartość progowa
+    reaction_time: int = 50       # Czas reakcji
+    detail_level: int = 50        # Poziom szczegółowości
+    criteria_weight: int = 50     # Waga kryteriów
+
     # System Control
     risk_guard_enabled: bool = True # Czy RiskGuard jest aktywny
     system_paused: bool = False     # Czy system jest zapauzowany (runtime)
@@ -262,6 +269,11 @@ class Config:
         data = {
             "aggressiveness": self.aggressiveness,
             "math_confidence": self.math_confidence,
+            "algo_sensitivity": self.algo_sensitivity,
+            "threshold_value": self.threshold_value,
+            "reaction_time": self.reaction_time,
+            "detail_level": self.detail_level,
+            "criteria_weight": self.criteria_weight,
             "system_paused": self.system_paused,
             "risk_guard_enabled": self.risk_guard_enabled
         }
@@ -269,6 +281,35 @@ class Config:
             Paths.RUNTIME_CONFIG.write_text(json.dumps(data, indent=2), encoding="utf-8")
         except Exception:
             pass
+
+    def to_json(self) -> str:
+        """Exports current configuration to JSON string."""
+        data = {
+            "aggressiveness": self.aggressiveness,
+            "math_confidence": self.math_confidence,
+            "algo_sensitivity": self.algo_sensitivity,
+            "threshold_value": self.threshold_value,
+            "reaction_time": self.reaction_time,
+            "detail_level": self.detail_level,
+            "criteria_weight": self.criteria_weight,
+            "system_paused": self.system_paused,
+            "risk_guard_enabled": self.risk_guard_enabled,
+            "risk_per_trade_percent": self.risk_per_trade_percent,
+            "max_trades_per_day": self.max_trades_per_day
+        }
+        return json.dumps(data, indent=2, ensure_ascii=False)
+
+    def update_from_dict(self, data: Dict[str, Any]) -> None:
+        """Updates configuration from a dictionary."""
+        if "aggressiveness" in data: self.aggressiveness = int(data["aggressiveness"])
+        if "math_confidence" in data: self.math_confidence = int(data["math_confidence"])
+        if "algo_sensitivity" in data: self.algo_sensitivity = int(data["algo_sensitivity"])
+        if "threshold_value" in data: self.threshold_value = int(data["threshold_value"])
+        if "reaction_time" in data: self.reaction_time = int(data["reaction_time"])
+        if "detail_level" in data: self.detail_level = int(data["detail_level"])
+        if "criteria_weight" in data: self.criteria_weight = int(data["criteria_weight"])
+        if "risk_per_trade_percent" in data: self.risk_per_trade_percent = float(data["risk_per_trade_percent"])
+        self.save_runtime_config()
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -333,6 +374,12 @@ class Config:
         aggressiveness = runtime_config.get("aggressiveness", get_int("AGGRESSIVENESS", "5"))
         math_confidence = runtime_config.get("math_confidence", get_int("MATH_CONFIDENCE", "5"))
         
+        algo_sensitivity = runtime_config.get("algo_sensitivity", get_int("ALGO_SENSITIVITY", "50"))
+        threshold_value = runtime_config.get("threshold_value", get_int("THRESHOLD_VALUE", "50"))
+        reaction_time = runtime_config.get("reaction_time", get_int("REACTION_TIME", "50"))
+        detail_level = runtime_config.get("detail_level", get_int("DETAIL_LEVEL", "50"))
+        criteria_weight = runtime_config.get("criteria_weight", get_int("CRITERIA_WEIGHT", "50"))
+        
         data_source = get_str("DATA_SOURCE", "yahoo")
         instruments_env = get_str("INSTRUMENTS", "")
         sections_env = get_str("INSTRUMENT_SECTIONS", "")
@@ -371,4 +418,9 @@ class Config:
             system_paused=system_paused,
             aggressiveness=aggressiveness,
             math_confidence=math_confidence,
+            algo_sensitivity=algo_sensitivity,
+            threshold_value=threshold_value,
+            reaction_time=reaction_time,
+            detail_level=detail_level,
+            criteria_weight=criteria_weight,
         )

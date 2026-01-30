@@ -35,6 +35,10 @@ from app.analysis.market_regime import MarketRegimeEngine
 from app.diagnostics import DiagnosticsEngine
 from app.notifications.alert_manager import AlertManager
 from app.updater.updater import UpdateManager
+from app.optimization.optimizer import OptimizationEngine
+from app.risk.guard import RiskGuard
+from app.analysis.performance_report import PerformanceReportGenerator
+from app.analysis.performance_report import PerformanceReportGenerator
 import random
 
 
@@ -47,10 +51,12 @@ class TelegramBot:
         config: Config,
         event_bus: EventBus,
         news_client: Optional[NewsClient] = None,
+        risk_guard: Optional[RiskGuard] = None,
     ) -> None:
         self._config = config
         self._event_bus = event_bus
         self._news_client = news_client or NewsClient()
+        self._risk_guard = risk_guard if risk_guard else RiskGuard(config)
         self._community_sentiment = CommunitySentimentManager()
         self._info_hub = InfoHub()
         self._cards = KnowledgeDeck()
@@ -78,6 +84,7 @@ class TelegramBot:
         yahoo_client = YahooFinanceClient()
         self._sentiment_engine = SentimentEngine(yahoo_client, self._news_client)
         self._briefing_service = BriefingService(self._sentiment_engine, self._news_client, yahoo_client)
+        self._report_generator = PerformanceReportGenerator()
         self._stats_builder = InstrumentStatsBuilder(config)
         
         # Gamification engine (XP, profile, rewards)
@@ -94,7 +101,8 @@ class TelegramBot:
             config, 
             self._news_client, 
             self._sentiment_engine, 
-            self._gamification
+            self._gamification,
+            self._risk_guard
         )
         
         # Updater
@@ -704,6 +712,10 @@ class TelegramBot:
             elif command_type == "why_last_trade":
                 text = f"📜 **Wyjaśnienie ostatniej decyzji:**\n\n{self._last_explanation}" if self._last_explanation else "ℹ️ **Info:** Brak zarejestrowanego ostatniego trade’u."
                 await self._send_message(session, str(chat_id), text)
+            elif command_type == "why":
+                args = command.get("args", [])
+                reply_text = command.get("reply_to_text")
+                await self._handle_why_command(session, str(chat_id), args, reply_text)
             elif command_type == "restartml":
                 await self._send_message(session, str(chat_id), "🧠 **System ML:** Przeładowuję model...")
                 result = await self._ml_client.reload_model()
@@ -735,11 +747,21 @@ class TelegramBot:
                         await self._send_message(session, str(chat_id), f"Nieznana wartość: {value}. Użyj `on` lub `off`.")
                 else:
                     status = "✅ WŁĄCZONY" if self._config.risk_guard_enabled else "❌ WYŁĄCZONY"
+                    
+                    # Get dynamic profile details
+                    profile = self._risk_guard.get_dynamic_risk_profile()
+                    aggr_level = profile.get("aggressiveness_level", 5)
+                    risk_pct = profile.get("risk_per_trade_percent", 1.0)
+                    max_trades = profile.get("max_trades_per_day", 5)
+                    
                     await self._send_message(
                         session,
                         str(chat_id),
                         f"🛡️ **RiskGuard Status:** {status}\n"
-                        f"Limit dzienny: {self._config.max_trades_per_day} trades\n"
+                        f"📊 **Profil Dynamiczny:** Poziom {aggr_level}/10\n"
+                        f"   🔸 Max Trades: {max_trades}\n"
+                        f"   🔸 Risk per Trade: {risk_pct}%\n"
+                        f"   🔸 Config Limit: {self._config.max_trades_per_day} trades\n\n"
                         f"Użyj `/risk off` aby wyłączyć blokadę."
                     )
             elif command_type == "result":
@@ -830,6 +852,24 @@ class TelegramBot:
                     self._gamification.award_xp(str(chat_id), 10, reason="macro_analysis")
                 except Exception:
                     pass
+            elif command_type == "report":
+                args = command.get("args", [])
+                days = 7
+                if args:
+                    try:
+                        days = int(args[0])
+                    except ValueError:
+                        pass
+                
+                await self._send_message(session, str(chat_id), f"📊 **Raport:** Generuję raport wydajności (ostatnie {days} dni)...")
+                try:
+                    path = self._report_generator.generate_html_report(days=days)
+                    # In a real bot, we would upload the file.
+                    # Here we just notify about the path (VPS context).
+                    await self._send_message(session, str(chat_id), f"✅ Raport wygenerowany: `{path}`")
+                except Exception as e:
+                    self._log.error("Report generation failed: %s", e)
+                    await self._send_message(session, str(chat_id), "❌ Błąd generowania raportu.")
             elif command_type == "favorites_add":
                 symbols = command.get("symbols") or []
                 added = []
@@ -895,6 +935,10 @@ class TelegramBot:
                     str(chat_id),
                     "Użycie: /fav_add SYMBOL1 SYMBOL2 lub /fav_remove SYMBOL1 SYMBOL2.",
                 )
+            elif command_type == "why":
+                args = command.get("args", [])
+                reply_text = command.get("reply_to_text")
+                await self._handle_why_command(session, str(chat_id), args, reply_text)
             elif command_type == "config":
                 c = self._config
                 lines = [
@@ -1101,6 +1145,7 @@ class TelegramBot:
                     "/resume - Wznów otwieranie nowych pozycji",
                     "/check_update - Sprawdź dostępność aktualizacji",
                     "/update_git - Pobierz i zaktualizuj kod (Git Pull)",
+                    "/update_status - Sprawdź status aktualizacji",
                     "/rollback - Cofnij ostatnią aktualizację",
                     "/help - Ta lista komend",
                     "",
@@ -1113,22 +1158,11 @@ class TelegramBot:
                 await self._handle_trade_command(session, str(chat_id))
             elif command_type == "admin":
                 # SYSTEM MENU (Context / Admin)
-                is_paused = self._config.system_paused
-                pause_btn = {"text": "▶️ Wznów (Resume)", "callback_data": "cmd:resume"} if is_paused else {"text": "⏸️ Pauza (Pause)", "callback_data": "cmd:pause"}
-                
                 keyboard = {
                     "inline_keyboard": [
                         [
-                            {"text": "🖥️ Stan Serwera", "callback_data": "cmd:diag"},
-                            {"text": "📝 Logi", "callback_data": "cmd:debug"},
-                        ],
-                        [
-                            pause_btn,
-                            {"text": "🔄 Sprawdź Update", "callback_data": "cmd:check_update"},
-                        ],
-                        [
-                            {"text": "🔄 Restart", "callback_data": "cmd:restart"},
-                            {"text": "⚠️ PANIC BUTTON", "callback_data": "cmd:panic_menu"},
+                            {"text": "🖥️ Serwer & Diagnostyka", "callback_data": "cmd:admin_server"},
+                            {"text": "🧠 Modele ML", "callback_data": "cmd:admin_ml"},
                         ],
                         [
                             {"text": "⚙️ Strategia", "callback_data": "menu:config_menu"},
@@ -1136,7 +1170,11 @@ class TelegramBot:
                         ]
                     ]
                 }
-                await self._send_message(session, str(chat_id), "🛠️ **Menu Systemowe**", reply_markup=keyboard)
+                await self._send_message(session, str(chat_id), "🛠️ **Menu Systemowe**\nWybierz podkategorię:", reply_markup=keyboard)
+            elif command_type == "admin_server":
+                await self._handle_admin_server_menu(session, str(chat_id))
+            elif command_type == "admin_ml":
+                await self._handle_admin_ml_menu(session, str(chat_id))
             elif command_type == "learn":
                 term = command.get("term")
                 if term:
@@ -1434,6 +1472,50 @@ class TelegramBot:
             
         await self._send_message(session, chat_id, "\n".join(lines))
 
+    async def _handle_admin_server_menu(self, session: aiohttp.ClientSession, chat_id: str) -> None:
+        """Displays the Admin Server submenu."""
+        is_paused = self._config.system_paused
+        pause_btn = {"text": "▶️ Wznów (Resume)", "callback_data": "cmd:resume"} if is_paused else {"text": "⏸️ Pauza (Pause)", "callback_data": "cmd:pause"}
+        
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "🖥️ Stan Serwera", "callback_data": "cmd:diag"},
+                    {"text": "📝 Logi", "callback_data": "cmd:debug"},
+                ],
+                [
+                    pause_btn,
+                    {"text": "🔄 Sprawdź Update", "callback_data": "cmd:check_update"},
+                ],
+                [
+                    {"text": "🔄 Restart Bota", "callback_data": "cmd:restart"},
+                    {"text": "⚠️ PANIC BUTTON", "callback_data": "cmd:panic_menu"},
+                ],
+                [
+                    {"text": "🔙 Wróć", "callback_data": "cmd:admin"}
+                ]
+            ]
+        }
+        await self._send_message(session, chat_id, "🖥️ **Administracja Serwerem**", reply_markup=keyboard)
+
+    async def _handle_admin_ml_menu(self, session: aiohttp.ClientSession, chat_id: str) -> None:
+        """Displays the Admin ML submenu."""
+        keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "🧠 Restart ML", "callback_data": "cmd:restartml"},
+                    {"text": "📊 Status ML", "callback_data": "cmd:diag"},
+                ],
+                [
+                     {"text": "🧹 Wyczyść Modele", "callback_data": "cmd:clear_ml"},
+                ],
+                [
+                    {"text": "🔙 Wróć", "callback_data": "cmd:admin"}
+                ]
+            ]
+        }
+        await self._send_message(session, chat_id, "🧠 **Zarządzanie ML**", reply_markup=keyboard)
+
     async def _handle_panic_menu(self, session: aiohttp.ClientSession, chat_id: str) -> None:
         """Displays the Panic Button menu."""
         keyboard = {
@@ -1506,6 +1588,64 @@ class TelegramBot:
         await self._send_message(session, chat_id, "\n".join(lines))
 
 
+
+    async def _handle_why_command(self, session: aiohttp.ClientSession, chat_id: str, args: List[str], reply_text: Optional[str] = None) -> None:
+        """Explains why a decision was made (or not made)."""
+        # 1. Determine symbol
+        symbol = None
+        if args:
+            symbol = args[0].upper()
+        elif reply_text:
+            # Try to extract symbol from message: "#EURUSD"
+            import re
+            match = re.search(r"#([A-Z0-9_]+)", reply_text)
+            if match:
+                symbol = match.group(1)
+        
+        if not symbol:
+            await self._send_message(session, chat_id, "Użycie: `/why SYMBOL` (lub odpowiedz na wiadomość).")
+            return
+
+        # 2. Check Decision Cache (active signals)
+        if symbol in self._decision_cache:
+            decision, timestamp = self._decision_cache[symbol]
+            age = datetime.utcnow() - timestamp
+            
+            # Check if it's recent enough (e.g. 2h)
+            if age.total_seconds() < 7200:
+                explanation = decision.explanation_text
+                # Also check metadata for risk details
+                if decision.metadata.get("reason") == "risk_guard":
+                     risk_details = decision.metadata.get("risk_details", "Nieznana blokada")
+                     explanation = f"🛡️ **Blokada RiskGuard**\n{risk_details}"
+                
+                await self._send_message(
+                    session, 
+                    chat_id, 
+                    f"🧐 **Analiza dla {symbol} ({int(age.total_seconds()/60)}m temu):**\n\n{explanation}"
+                )
+                return
+
+        # 3. Check Rejection Stats (NO_TRADE)
+        if symbol in self._rejection_stats:
+            stats = self._rejection_stats[symbol]
+            reason = stats["reason"]
+            count = stats["count"]
+            ts = stats["timestamp"]
+            age = datetime.utcnow() - ts
+            
+            # Formatting
+            msg = (
+                f"🧐 **Dlaczego brak pozycji na {symbol}?**\n"
+                f"🕒 Ostatnia ocena: {int(age.total_seconds()/60)}m temu\n"
+                f"🚫 Powód: **{reason}**\n"
+                f"🔢 Powtórzeń tego powodu: {count}"
+            )
+            await self._send_message(session, chat_id, msg)
+            return
+
+        # 4. Fallback
+        await self._send_message(session, chat_id, f"🤷‍♂️ Brak danych o ostatnich decyzjach dla {symbol}.")
 
     async def _handle_calendar_command(self, session: aiohttp.ClientSession, chat_id: str) -> None:
         """Displays economic calendar for today and tomorrow."""
@@ -1856,7 +1996,8 @@ class TelegramBot:
                     {"text": "➕", "callback_data": "conf:math:inc"}
                 ],
                 [
-                    {"text": "🧪 Testuj (Backtest EURUSD)", "callback_data": "conf:test"}
+                    {"text": "🧪 Testuj (Backtest EURUSD)", "callback_data": "conf:test"},
+                    {"text": "🛠️ Zaawansowane", "callback_data": "conf:advanced"}
                 ],
                 [
                     {"text": "🔙 Wróć do Admina", "callback_data": "cmd:admin"}
@@ -1869,10 +2010,126 @@ class TelegramBot:
         else:
             await self._send_message(session, chat_id, text, reply_markup=keyboard)
 
+    async def _handle_advanced_config_command(self, session: aiohttp.ClientSession, chat_id: str, message_id: Optional[int] = None) -> None:
+        """Displays advanced configuration sliders."""
+        c = self._config
+        text = (
+            "🛠️ **ZAAWANSOWANA KONFIGURACJA**\n"
+            "Precyzyjne dostrajanie parametrów (0-100).\n\n"
+            f"🎯 Czułość: {c.algo_sensitivity}\n"
+            f"🚪 Próg: {c.threshold_value}\n"
+            f"⚡ Reakcja: {c.reaction_time}\n"
+            f"🔍 Szczegóły: {c.detail_level}\n"
+            f"⚖️ Waga: {c.criteria_weight}"
+        )
+        
+        # Helper to create slider row
+        def slider_row(label, key, val):
+            return [
+                {"text": "➖", "callback_data": f"conf:{key}:dec"},
+                {"text": f"{label}: {val}", "callback_data": "conf:dummy"},
+                {"text": "➕", "callback_data": f"conf:{key}:inc"}
+            ]
+
+        keyboard = {
+            "inline_keyboard": [
+                slider_row("Czułość", "algo", c.algo_sensitivity),
+                slider_row("Próg", "thresh", c.threshold_value),
+                slider_row("Reakcja", "time", c.reaction_time),
+                slider_row("Szczegóły", "detail", c.detail_level),
+                slider_row("Waga", "weight", c.criteria_weight),
+                [{"text": "💾 Eksport JSON", "callback_data": "conf:export_json"}],
+                [{"text": "🧪 Uruchom Testy & Raport PDF", "callback_data": "conf:run_tests"}],
+                [{"text": "🧬 Auto-Tuning (Genetyczny)", "callback_data": "conf:auto_tune"}],
+                [{"text": "🔙 Wróć", "callback_data": "menu:config_menu"}]
+            ]
+        }
+        
+        if message_id:
+            await self._edit_message_text(session, chat_id, message_id, text, reply_markup=keyboard)
+        else:
+            await self._send_message(session, chat_id, text, reply_markup=keyboard)
+
     async def _handle_config_action(self, session: aiohttp.ClientSession, chat_id: str, message_id: int, action: str) -> None:
         """Handles config adjustment actions."""
-        # action format: agg:inc, agg:dec, math:inc, math:dec, save, test
+        # action format: agg:inc, agg:dec, math:inc, math:dec, save, test, advanced, algo:inc...
         
+        if action == "advanced":
+            await self._handle_advanced_config_command(session, chat_id, message_id)
+            return
+            
+        if action == "export_json":
+            json_str = self._config.to_json()
+            # Send as file or text
+            if len(json_str) < 4000:
+                 await self._send_message(session, chat_id, f"📄 **Konfiguracja JSON:**\n```json\n{json_str}\n```")
+            return
+
+        if action == "run_tests":
+            await self._send_message(session, chat_id, "🧪 Uruchamiam zestaw 20 testów symulacyjnych...")
+            opt = OptimizationEngine(self._config)
+            # Pass current dynamic params as overrides
+            overrides = {
+                "algo_sensitivity": self._config.algo_sensitivity,
+                "threshold_value": self._config.threshold_value,
+                "reaction_time": self._config.reaction_time,
+                "detail_level": self._config.detail_level,
+                "criteria_weight": self._config.criteria_weight
+            }
+            try:
+                # Run in executor to avoid blocking event loop
+                loop = asyncio.get_event_loop()
+                res = await loop.run_in_executor(None, opt.run_test_suite, overrides)
+                
+                # Generate PDF
+                pdf_path = await loop.run_in_executor(None, opt.generate_pdf_report, res)
+                
+                # Send summary text
+                summary = (
+                    f"✅ **Testy zakończone**\n"
+                    f"Score: {res.total_score:.2f} | Success: {res.success_rate}%\n"
+                    f"Avg Time: {res.avg_execution_time:.2f}ms | Mem: {res.avg_memory_peak:.2f}KB\n"
+                    f"Raport PDF jest generowany..."
+                )
+                await self._send_message(session, chat_id, summary)
+                
+                # Send PDF
+                if os.path.exists(pdf_path):
+                     url = f"https://api.telegram.org/bot{self._config.telegram_bot_token}/sendDocument"
+                     data = aiohttp.FormData()
+                     data.add_field("chat_id", chat_id)
+                     data.add_field("document", open(pdf_path, "rb"), filename=os.path.basename(pdf_path))
+                     async with session.post(url, data=data) as resp:
+                         if resp.status != 200:
+                             self._log.error(f"Failed to send PDF: {await resp.text()}")
+            except Exception as e:
+                self._log.error(f"Optimization error: {e}")
+                await self._send_message(session, chat_id, f"⚠️ Błąd testów: {e}")
+            return
+
+        if action == "auto_tune":
+            await self._send_message(session, chat_id, "🧬 Rozpoczynam Auto-Tuning (Algorytm Genetyczny)...")
+            opt = OptimizationEngine(self._config)
+            try:
+                loop = asyncio.get_event_loop()
+                best_params = await loop.run_in_executor(None, opt.genetic_algorithm_tune, 5)
+                
+                # Apply params
+                self._config.update_from_dict(best_params)
+                self._config.save_runtime_config()
+                
+                msg = (
+                    "🧬 **Optymalizacja zakończona!**\n"
+                    "Zastosowano nowe parametry:\n" + 
+                    "\n".join([f"- {k}: {v}" for k, v in best_params.items()])
+                )
+                await self._send_message(session, chat_id, msg)
+                # Refresh advanced menu
+                await self._handle_advanced_config_command(session, chat_id, message_id)
+            except Exception as e:
+                 await self._send_message(session, chat_id, f"⚠️ Błąd tuningu: {e}")
+            return
+
         changed = False
         
         if action == "test":
@@ -1883,27 +2140,47 @@ class TelegramBot:
              await self._send_message(session, chat_id, summary)
              return
 
-        if action == "agg:inc":
-            if self._config.aggressiveness < 10:
-                self._config.aggressiveness += 1
-                changed = True
-        elif action == "agg:dec":
-            if self._config.aggressiveness > 1:
-                self._config.aggressiveness -= 1
-                changed = True
-        elif action == "math:inc":
-            if self._config.math_confidence < 10:
-                self._config.math_confidence += 1
-                changed = True
-        elif action == "math:dec":
-            if self._config.math_confidence > 1:
-                self._config.math_confidence -= 1
-                changed = True
+        c = self._config
         
+        # Map actions to attributes
+        # format: key:inc or key:dec
+        if ":" in action:
+            key, direction = action.rsplit(":", 1)
+            
+            # Helper for 1-10 scale
+            if key == "agg":
+                if direction == "inc" and c.aggressiveness < 10: c.aggressiveness += 1; changed = True
+                elif direction == "dec" and c.aggressiveness > 1: c.aggressiveness -= 1; changed = True
+            elif key == "math":
+                if direction == "inc" and c.math_confidence < 10: c.math_confidence += 1; changed = True
+                elif direction == "dec" and c.math_confidence > 1: c.math_confidence -= 1; changed = True
+            
+            # Helper for 0-100 scale (Advanced)
+            elif key in ["algo", "thresh", "time", "detail", "weight"]:
+                attr_map = {
+                    "algo": "algo_sensitivity",
+                    "thresh": "threshold_value",
+                    "time": "reaction_time",
+                    "detail": "detail_level",
+                    "weight": "criteria_weight"
+                }
+                attr = attr_map[key]
+                val = getattr(c, attr)
+                if direction == "inc" and val < 100:
+                    setattr(c, attr, val + 1)
+                    changed = True
+                elif direction == "dec" and val > 0:
+                    setattr(c, attr, val - 1)
+                    changed = True
+
         if changed:
             self._config.save_runtime_config()
-            # Refresh the UI
-            await self._handle_strategy_config_command(session, chat_id, message_id)
+            # Refresh the UI based on where we are
+            # We need to guess context or check action to decide which menu to show
+            if action.startswith(("algo", "thresh", "time", "detail", "weight")):
+                await self._handle_advanced_config_command(session, chat_id, message_id)
+            else:
+                await self._handle_strategy_config_command(session, chat_id, message_id)
         else:
             # If no change (limit reached), just answer callback query (already done in _handle_callback)
             pass
@@ -2049,6 +2326,10 @@ class TelegramBot:
                 return
             elif cmd_name == "admin":
                 command = {"type": "admin", "chat_id": chat_id}
+            elif cmd_name == "admin_server":
+                command = {"type": "admin_server", "chat_id": chat_id}
+            elif cmd_name == "admin_ml":
+                command = {"type": "admin_ml", "chat_id": chat_id}
             elif cmd_name == "panic_menu":
                 async with aiohttp.ClientSession() as session:
                    await self._handle_panic_menu(session, chat_id)
