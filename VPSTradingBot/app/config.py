@@ -247,6 +247,10 @@ class Config:
     
     # Edukacja
     educational_mode: bool    # Czy tryb edukacyjny jest włączony (True/False)
+    
+    # System Control
+    risk_guard_enabled: bool = True # Czy RiskGuard jest aktywny
+    system_paused: bool = False     # Czy system jest zapauzowany (runtime)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -290,6 +294,8 @@ class Config:
 
         environment = get_str("ENVIRONMENT", "practice")
         mode = get_str("MODE", "advisor")
+        risk_guard_enabled = get_str("RISK_GUARD_ENABLED", "true").lower() == "true"
+        
         data_source = get_str("DATA_SOURCE", "yahoo")
         instruments_env = get_str("INSTRUMENTS", "")
         sections_env = get_str("INSTRUMENT_SECTIONS", "")
@@ -324,4 +330,6 @@ class Config:
             max_trades_per_instrument_per_day=get_int("MAX_TRADES_PER_INSTRUMENT_PER_DAY", "3"),
             ml_base_url=get_str("ML_BASE_URL", ""),
             educational_mode=get_str("EDUCATIONAL_MODE", "true").lower() == "true",
+            risk_guard_enabled=risk_guard_enabled,
+            system_paused=False, # Default start state
         )

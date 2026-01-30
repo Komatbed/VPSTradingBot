@@ -47,7 +47,7 @@ class EquityGuard:
             "reason": reason
         }
 
-    def check_daily_lockout(self, chat_id: str) -> bool:
-        """Returns True if trading should be locked for the day."""
-        # TODO: Implement daily P&L tracking
-        return False
+    # # def check_daily_lockout(self, chat_id: str) -> bool:
+    #     """Returns True if trading should be locked for the day."""
+    #     # TODO: Implement daily P&L tracking
+    #     return False

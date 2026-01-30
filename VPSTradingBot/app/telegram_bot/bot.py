@@ -103,15 +103,6 @@ class TelegramBot:
         # ML Client
         self._ml_client = MlAdvisorClient(config)
 
-        # ML Client
-        self._ml_client = MlAdvisorClient(config)
-
-        # ML Client
-        self._ml_client = MlAdvisorClient(config)
-
-        # ML Client
-        self._ml_client = MlAdvisorClient(config)
-
 
     def _get_rank_flavor(self, chat_id: str) -> str:
         try:
@@ -703,16 +694,33 @@ class TelegramBot:
                 self._log.info("Restart requested via Telegram. Exiting process.")
                 sys.exit(0)
             elif command_type == "pause":
-                await self._send_message(session, str(chat_id), "Pauza systemu nie jest jeszcze zaimplementowana.")
+                self._config.system_paused = True
+                await self._send_message(session, str(chat_id), "⏸️ **System ZAPAUZOWANY.**\nNie będą otwierane nowe pozycje.")
             elif command_type == "resume":
-                await self._send_message(session, str(chat_id), "Wznawianie systemu nie jest jeszcze zaimplementowane.")
+                self._config.system_paused = False
+                await self._send_message(session, str(chat_id), "▶️ **System WZNOWIONY.**\nGenerowanie sygnałów aktywne.")
             elif command_type == "risk":
+                # Usage: /risk [on|off] or /risk value
                 value = command.get("value")
-                await self._send_message(
-                    session,
-                    str(chat_id),
-                    f"Zmiana ryzyka nie jest jeszcze w pełni zaimplementowana (wartość={value}).",
-                )
+                if value:
+                    v_str = str(value).lower()
+                    if v_str in ("on", "enable", "true"):
+                        self._config.risk_guard_enabled = True
+                        await self._send_message(session, str(chat_id), "🛡️ **RiskGuard:** WŁĄCZONY (ON).")
+                    elif v_str in ("off", "disable", "false"):
+                        self._config.risk_guard_enabled = False
+                        await self._send_message(session, str(chat_id), "⚠️ **RiskGuard:** WYŁĄCZONY (OFF).\nUważaj na overtrading!")
+                    else:
+                        await self._send_message(session, str(chat_id), f"Nieznana wartość: {value}. Użyj `on` lub `off`.")
+                else:
+                    status = "✅ WŁĄCZONY" if self._config.risk_guard_enabled else "❌ WYŁĄCZONY"
+                    await self._send_message(
+                        session,
+                        str(chat_id),
+                        f"🛡️ **RiskGuard Status:** {status}\n"
+                        f"Limit dzienny: {self._config.max_trades_per_day} trades\n"
+                        f"Użyj `/risk off` aby wyłączyć blokadę."
+                    )
             elif command_type == "result":
                 value_r = command.get("value_r")
                 note = command.get("note")
@@ -1266,7 +1274,8 @@ class TelegramBot:
         client = YahooFinanceClient()
         learning_engine = LearningEngine()
         learning_engine.refresh()
-        ml_client = MlAdvisorClient(self._config)
+        # Use existing ML client instance
+        ml_client = self._ml_client
         candles = await client.fetch_candles(None, symbol=symbol, timeframe=timeframe, count=count)
         if not candles:
             return f"Brak świec dla {symbol} {timeframe}."

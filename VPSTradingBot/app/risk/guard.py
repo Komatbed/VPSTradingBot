@@ -60,6 +60,10 @@ class RiskGuard:
             pass # Fail silently, start from 0 is better than crash
 
     def can_open_trade(self, instrument: str) -> bool:
+        # If RiskGuard is disabled via config, allow all trades
+        if not self._config.risk_guard_enabled:
+            return True
+
         self._ensure_today()
         if self._trades_total_for_day >= self._config.max_trades_per_day:
             return False

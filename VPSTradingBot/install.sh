@@ -4,17 +4,43 @@
 
 echo "🚀 Starting VPSTradingBot Installation..."
 
-# 1. Check Python version
-if ! command -v python3.10 &> /dev/null; then
-    echo "❌ Python 3.10 is required but not found."
-    echo "   Install it: sudo apt install python3.10 python3.10-venv python3.10-dev"
+# 1. Determine Python Interpreter (3.10+)
+PYTHON_EXEC=""
+
+if command -v python3 &>/dev/null; then
+    # Check version >= 3.10 using python one-liner
+    if python3 -c 'import sys; exit(0 if sys.version_info >= (3, 10) else 1)'; then
+        PYTHON_EXEC="python3"
+    fi
+fi
+
+# Fallback to explicit versions if default python3 is too old or checking failed
+if [ -z "$PYTHON_EXEC" ]; then
+    for ver in "python3.10" "python3.11" "python3.12"; do
+        if command -v $ver &>/dev/null; then
+            PYTHON_EXEC=$ver
+            break
+        fi
+    done
+fi
+
+if [ -z "$PYTHON_EXEC" ]; then
+    echo "❌ Python 3.10+ is required but not found."
+    echo "   Current 'python3' is too old or missing."
+    echo "   Install Python 3.10:"
+    echo "     sudo apt update"
+    echo "     sudo apt install software-properties-common"
+    echo "     sudo add-apt-repository ppa:deadsnakes/ppa"
+    echo "     sudo apt install python3.10 python3.10-venv python3.10-dev"
     exit 1
 fi
+
+echo "✅ Using Python interpreter: $PYTHON_EXEC"
 
 # 2. Setup Virtual Environment
 if [ ! -d ".venv" ]; then
     echo "📦 Creating virtual environment (.venv)..."
-    python3.10 -m venv .venv
+    $PYTHON_EXEC -m venv .venv
 else
     echo "ℹ️  Virtual environment already exists."
 fi

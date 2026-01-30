@@ -378,6 +378,38 @@ class StrategyEngine:
         snapshot,
         signals: List[tuple[Strategy, StrategySignal, float]],
     ) -> None:
+        # --- SYSTEM PAUSE CHECK ---
+        if self._config.system_paused:
+             self._log.info(f"System paused. Skipping trade for {snapshot.instrument}")
+             # Optionally emit a NO_TRADE decision so UI knows we are alive but paused
+             decision_id = f"no_trade_paused_{snapshot.instrument}_{snapshot.timeframe}_{int(datetime.utcnow().timestamp())}"
+             decision = FinalDecision(
+                decision_id=decision_id,
+                instrument=snapshot.instrument,
+                timeframe=snapshot.timeframe,
+                verdict=DecisionVerdict.NO_TRADE,
+                direction=None,
+                entry_type="none",
+                entry_price=0.0,
+                sl_price=0.0,
+                tp_price=0.0,
+                rr=0.0,
+                confidence=0.0,
+                strategy_id="system_paused",
+                regime=snapshot.regime,
+                expectancy_r=0.0,
+                tradingview_link=get_tv_link(snapshot.instrument),
+                explanation_text="⏸️ System jest ZAPAUZOWANY (komenda /pause).",
+                metadata={"reason": "system_paused"},
+            )
+             await self._event_bus.publish(
+                Event(
+                    type=EventType.DECISION_READY,
+                    payload=decision,
+                )
+            )
+             return
+
         # --- RISK GUARD CHECK ---
         if not self._risk_guard.can_open_trade(snapshot.instrument):
              self._log.warning(f"RiskGuard blocked trade for {snapshot.instrument} (Daily limit reached)")
