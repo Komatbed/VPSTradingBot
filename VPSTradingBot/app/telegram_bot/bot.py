@@ -95,6 +95,9 @@ class TelegramBot:
             self._sentiment_engine, 
             self._gamification
         )
+        
+        # Updater
+        self._updater = UpdateManager()
 
 
     def _get_rank_flavor(self, chat_id: str) -> str:
@@ -1823,6 +1826,48 @@ class TelegramBot:
                 command = {"type": "events", "chat_id": chat_id}
             elif cmd_name == "alerts_menu":
                 command = {"type": "alerts", "chat_id": chat_id}
+            # Updater Handlers
+            elif cmd_name == "check_update":
+                has_update, msg = self._updater.check_for_updates()
+                resp = f"🔍 **Status Aktualizacji**\n{msg}"
+                async with aiohttp.ClientSession() as session:
+                    await self._send_message(session, chat_id, resp)
+                return
+            elif cmd_name == "update_git":
+                # Confirm update? No, direct action as requested.
+                async with aiohttp.ClientSession() as session:
+                    await self._send_message(session, chat_id, "⏳ Rozpoczynam procedurę aktualizacji...")
+                    # Update process is blocking for git but should be fast.
+                    # Ideally we run in executor.
+                    # For simplicity, calling sync method.
+                    result = self._updater.perform_update(chat_id)
+                    await self._send_message(session, chat_id, f"📝 {result}")
+                return
+            elif cmd_name == "update_status":
+                status = self._updater.get_status()
+                async with aiohttp.ClientSession() as session:
+                    await self._send_message(session, chat_id, f"ℹ️ **System Status**\n{status}")
+                return
+            elif cmd_name == "rollback":
+                 result = self._updater.rollback()
+                 async with aiohttp.ClientSession() as session:
+                    await self._send_message(session, chat_id, f"🔙 {result}")
+                 return
+            elif cmd_name == "clear_cache":
+                self._updater.guard.cleanup_cache()
+                async with aiohttp.ClientSession() as session:
+                    await self._send_message(session, chat_id, "🧹 Cache wyczyszczony.")
+                return
+            elif cmd_name == "clear_backtests":
+                self._updater.guard.cleanup_backtests()
+                async with aiohttp.ClientSession() as session:
+                    await self._send_message(session, chat_id, "🧹 Wyniki backtestów wyczyszczone.")
+                return
+            elif cmd_name == "clear_ml":
+                self._updater.guard.cleanup_ml()
+                async with aiohttp.ClientSession() as session:
+                    await self._send_message(session, chat_id, "🧹 Modele ML wyczyszczone.")
+                return
             elif cmd_name == "admin":
                 command = {"type": "admin", "chat_id": chat_id}
             elif cmd_name == "panic_menu":
@@ -2125,6 +2170,21 @@ class TelegramBot:
         elif text.startswith("/alerts"):
             args = text.replace("/alerts", "").strip().split()
             command = {"type": "alerts", "args": args, "chat_id": chat_id}
+        # Updater Commands
+        elif text.startswith("/check_update"):
+            command = {"type": "check_update", "chat_id": chat_id}
+        elif text.startswith("/update_git"):
+            command = {"type": "update_git", "chat_id": chat_id}
+        elif text.startswith("/update_status"):
+            command = {"type": "update_status", "chat_id": chat_id}
+        elif text.startswith("/rollback"):
+            command = {"type": "rollback", "chat_id": chat_id}
+        elif text.startswith("/clear_cache"):
+            command = {"type": "clear_cache", "chat_id": chat_id}
+        elif text.startswith("/clear_backtests"):
+            command = {"type": "clear_backtests", "chat_id": chat_id}
+        elif text.startswith("/clear_ml"):
+            command = {"type": "clear_ml", "chat_id": chat_id}
         else:
             command = {"type": "unknown", "raw": text, "chat_id": chat_id}
 
@@ -2166,6 +2226,12 @@ class TelegramBot:
         
         # Setup commands menu
         await self._set_bot_commands()
+        
+        # Check for update status
+        upd_msg, upd_chat_id = self._updater.check_post_update()
+        if upd_msg and upd_chat_id:
+             async with aiohttp.ClientSession() as session:
+                await self._send_message(session, upd_chat_id, upd_msg)
         
         # Send startup message
         await self.send_system_message("🚀 System Tradingowy wystartował. Wpisz /menu aby zacząć.")
