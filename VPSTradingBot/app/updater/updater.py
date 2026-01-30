@@ -15,11 +15,12 @@ from app.updater.healthcheck import run_healthcheck
 logger = logging.getLogger("updater")
 
 class UpdateManager:
-    def __init__(self, service_name: str = "tradingbot"):
+    def __init__(self, bot_service: str = "tradingbot", ml_service: str = "ml_advisor"):
         self.git = GitManager()
         self.guard = FileGuard()
         self.rollback_mgr = RollbackManager()
-        self.systemd = SystemdController(service_name)
+        self.bot_service = SystemdController(bot_service)
+        self.ml_service = SystemdController(ml_service)
         
         self._lock = threading.Lock()
         self._is_updating = False
@@ -34,8 +35,11 @@ class UpdateManager:
         if self._is_updating:
             return "Updating..."
         ver = self.git.get_current_version()
-        active = self.systemd.is_active()
-        return f"Version: {ver}\nService: {'Active' if active else 'Inactive'}"
+        bot_active = self.bot_service.is_active()
+        ml_active = self.ml_service.is_active()
+        return (f"Version: {ver}\n"
+                f"Bot Service: {'Active' if bot_active else 'Inactive'}\n"
+                f"ML Service: {'Active' if ml_active else 'Inactive'}")
 
     def perform_update(self, chat_id: Optional[str] = None) -> str:
         """
@@ -44,7 +48,7 @@ class UpdateManager:
         2. Snapshot
         3. Git Fetch & Reset
         4. Healthcheck
-        5. Restart Systemd
+        5. Restart Systemd (Bot & ML)
         """
         if not self._lock.acquire(blocking=False):
             return "Update already in progress."
@@ -73,10 +77,10 @@ class UpdateManager:
             # 4. Mark update pending (so we know on restart)
             self._write_status("pending_restart", snapshot, chat_id)
             
-            # 5. Restart Service
+            # 5. Restart Services
             threading.Thread(target=self._restart_sequence).start()
             
-            return "Update successful. System restarting..."
+            return "Update successful. Services restarting..."
             
         except Exception as e:
             logger.error(f"Update exception: {e}")
@@ -86,9 +90,12 @@ class UpdateManager:
             self._lock.release()
 
     def _restart_sequence(self):
-        """Waits a bit for message to send, then restarts"""
+        """Waits a bit for message to send, then restarts both services"""
         time.sleep(3)
-        self.systemd.restart()
+        # Restart ML first (it's a dependency usually)
+        self.ml_service.restart()
+        # Restart Bot
+        self.bot_service.restart()
 
     def rollback(self) -> str:
         snapshot = self.rollback_mgr.get_latest_snapshot()

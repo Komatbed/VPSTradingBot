@@ -3,24 +3,15 @@ Description=Trading ML Advisor Service
 After=network.target
 
 [Service]
-# Zmien 'root' na swojego uzytkownika jesli to nie root
-User=root
-
-# --- KONFIGURACJA SCIEZEK ---
-# Zmien ponizsze sciezki na faktyczna lokalizacje projektu na Twoim VPS
-WorkingDirectory=/home/ubuntu/TradeBot
-ExecStart=/home/ubuntu/TradeBot/start_ml.sh
-
-# Restartuj w przypadku awarii
+# Zmień 'User' na użytkownika VPS (np. ubuntu, root)
+User=ubuntu
+# Zmień 'WorkingDirectory' na ścieżkę do projektu
+WorkingDirectory=/home/ubuntu/VPSTradingBot
+# Uruchomienie serwera ML (FastAPI/Uvicorn)
+ExecStart=/home/ubuntu/VPSTradingBot/.venv/bin/python -m uvicorn ml.server:app --host 0.0.0.0 --port 8000
 Restart=always
-RestartSec=10
-
-# Zmienne srodowiskowe
+RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-
-# --- LOGI SYSTEMOWE ---
-StandardOutput=append:/home/ubuntu/TradeBot/ml_output.log
-StandardError=append:/home/ubuntu/TradeBot/ml_error.log
 
 [Install]
 WantedBy=multi-user.target
