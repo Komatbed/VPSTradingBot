@@ -38,6 +38,7 @@ class StrategyEngine:
         explain_engine: ExplainabilityEngine,
         learning_engine: LearningEngine,
         news_client: NewsClient,
+        risk_guard: RiskGuard,
     ) -> None:
         """
         Initializes the StrategyEngine.
@@ -49,6 +50,7 @@ class StrategyEngine:
             explain_engine: Engine for explaining decisions.
             learning_engine: Engine for reinforcement learning/stats.
             news_client: Client for checking economic calendar events.
+            risk_guard: Shared RiskGuard instance.
         """
         self._config = config
         self._event_bus = event_bus
@@ -59,7 +61,7 @@ class StrategyEngine:
         self._explain_engine = explain_engine
         self._learning_engine = learning_engine
         self._learning_engine.refresh()
-        self._risk_guard = RiskGuard(config)
+        self._risk_guard = risk_guard
         self._ml_client = MlAdvisorClient(config)
         self._news_client = news_client
         self._scoring_engine = ScoringEngine()  # Initialize ScoringEngine

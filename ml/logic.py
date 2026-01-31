@@ -48,12 +48,20 @@ class TradeClassifier:
         # Checks for external blocking factors like News or Holidays.
         # (Assuming news_proximity is passed in features, or 999 if unknown)
         news_dist = features.get("news_proximity", 999)
+        if news_dist is None:
+            news_dist = 999
+
         if news_dist < 30:
             return self._build_response(0, "SKIP", True, [f"News Blackout: High Impact event in {news_dist}min"], adjustments)
 
         # --- Layer 2: Safety & Risk (The "Must Haves") ---
         rr = features.get("rr", 0.0)
+        if rr is None:
+            rr = 0.0
+            
         confidence = features.get("confidence", 0.0)
+        if confidence is None:
+            confidence = 0.0
         
         if rr < 1.0:
             return self._build_response(0, "SKIP", True, ["Safety: R:R < 1.0 is mathematically ruinous"], adjustments)

@@ -1,8 +1,0 @@
-{
-  "name": "Run trading app",
-  "type": "python",
-  "request": "launch",
-  "module": "app.main",
-  "cwd": "f:/VsCodeWorkspace/Aplikacja_tradingowa_vps_companion",
-  "console": "integratedTerminal"
-}

@@ -17,7 +17,9 @@ from app.core.models import (
     UserDecisionRecord,
     FinalDecision,
     MarketDataSnapshot,
-    TradeRecord
+    TradeRecord,
+    OrderResult,
+    OrderStatus
 )
 from app.logging_system.trade_logger import TradeLogger
 
@@ -35,6 +37,7 @@ class ActivePosition:
     strategy_id: str
     current_profit_r: float = 0.0
     current_price: float = 0.0
+    explanation_data: Optional[Dict[str, Any]] = None
     
     def to_dict(self) -> dict:
         return {
@@ -48,6 +51,7 @@ class ActivePosition:
             "opened_at": self.opened_at.isoformat(),
             "strategy_id": self.strategy_id,
             "current_profit_r": self.current_profit_r,
+            "explanation_data": self.explanation_data,
             "current_price": self.current_price,
         }
     
