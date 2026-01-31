@@ -977,21 +977,6 @@ class TelegramBot:
                     except Exception as e:
                         self._log.warning("Gamification error (backtest): %s", e)
             elif command_type == "backtest_all":
-                # Check Level Gating (Level 5+)
-                try:
-                    profile = self._gamification.get_profile(chat_id)
-                    level = getattr(profile, "level", 1)
-                except Exception:
-                    level = 1
-                
-                if level < 5:
-                    await self._send_message(
-                        session,
-                        str(chat_id),
-                        f"🔒 **Funkcja zablokowana!**\nBacktest wszystkich instrumentów dostępny od poziomu 5 (Apprentice).\nAktualny poziom: {level}."
-                    )
-                    return
-
                 timeframe = command.get("timeframe") or "1d"
                 await self._send_message(
                     session,

@@ -72,11 +72,11 @@ class GamificationConstants:
     # --- LIMITY (ANTI-FARMING) ---
     # Ile razy dziennie można dostać XP za daną czynność
     DAILY_LIMITS: Dict[str, int] = {
-        "edu_learn": 5,           # Max 5 pojęć dziennie
-        "edu_tips": 3,            # Max 3 porady dziennie
-        "edu_backtest": 3,        # Max 3 backtesty dziennie
-        "action_enter": 10,       # Max 10 wejść dziennie (anty-overtrading)
-        "action_skip": 10         # Max 10 odpuszczeń dziennie
+        "edu_learn": 9999,           # No limit
+        "edu_tips": 9999,            # No limit
+        "edu_backtest": 9999,        # No limit
+        "action_enter": 9999,       # No limit
+        "action_skip": 9999         # No limit
     }
 
     # --- STREAKI (SERIE) ---
