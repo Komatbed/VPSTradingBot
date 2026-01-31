@@ -38,6 +38,16 @@ fi
 echo "✅ Using Python interpreter: $PYTHON_EXEC"
 
 # 2. Setup Virtual Environment
+if [ -d ".venv" ]; then
+    if [ ! -f ".venv/bin/activate" ]; then
+        echo "⚠️  Found .venv directory but missing activation script."
+        echo "♻️  Removing broken virtual environment..."
+        rm -rf .venv
+    else
+        echo "ℹ️  Virtual environment already exists."
+    fi
+fi
+
 if [ ! -d ".venv" ]; then
     echo "📦 Creating virtual environment (.venv)..."
     if ! $PYTHON_EXEC -m venv .venv; then
@@ -49,8 +59,6 @@ if [ ! -d ".venv" ]; then
         echo "   Then run this script again."
         exit 1
     fi
-else
-    echo "ℹ️  Virtual environment already exists."
 fi
 
 # 3. Install Dependencies
