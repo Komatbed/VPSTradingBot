@@ -10,9 +10,24 @@ class GitManager:
         self.repo = None
         try:
             self.repo = git.Repo(repo_path)
+            self._ensure_remote()
         except (git.InvalidGitRepositoryError, git.NoSuchPathError):
             logger.warning(f"No valid git repository found at {repo_path}. Update features disabled.")
             self.repo = None
+
+    def _ensure_remote(self):
+        """Ensures origin remote exists, prefers HTTPS for automated VPS deployments"""
+        if not self.repo: return
+        try:
+            if 'origin' not in self.repo.remotes:
+                logger.info("Remote 'origin' not found. Configuring HTTPS remote...")
+                self.repo.create_remote('origin', "https://github.com/Komatbed/VPSTradingBot.git")
+            else:
+                # Optional: Check if current remote is valid? 
+                # For now, just leave it if it exists.
+                pass
+        except Exception as e:
+            logger.error(f"Failed to configure remote: {e}")
 
     def fetch(self) -> bool:
         if not self.repo: return False

@@ -16,9 +16,9 @@ from app.strategy.engine import StrategyEngine
 from app.strategy.momentum_breakout import MomentumBreakoutStrategy
 from app.strategy.range_reversion import RangeReversionStrategy
 from app.strategy.trend_following import TrendFollowingStrategy
-from app.telegram_bot.bot import TelegramBot
-from app.risk.guard import RiskGuard
 from app.diagnostics import ConnectivityTester
+from app.risk.guard import RiskGuard
+from app.telegram_bot.bot import TelegramBot
 
 
 async def run_loop() -> None:

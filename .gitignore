@@ -24,6 +24,8 @@ logs/
 *.log
 trades/
 TEST_REPORT_*.md
+verification_log.txt
+instrument_verification_report.txt
 
 # Application Data (Runtime/Cache)
 app/data/*.json
@@ -33,6 +35,7 @@ app/data/active_trades.json
 app/data/user_favorites.json
 backtests/*.json
 cache/yahoo/*.json
+local_config.json
 
 # IDE Settings
 .vscode/
@@ -43,3 +46,4 @@ verify_*.py
 *copy.py
 *.old
 *.bak
+app_backup/
